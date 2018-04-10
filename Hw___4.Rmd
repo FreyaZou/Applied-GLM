@@ -1,0 +1,198 @@
+---
+title: "Homework 4"
+author: "Fuyu"
+date: "4/9/2018"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Q1
+
+## Part a: Model this outcome as a function of treatment assignment using a Poisson regression. Does the model fit well? Is there evidence of overdispersion?
+
+The model does not fit well, since the deviance ratio is very large $\frac{12925}{431} = 29.9884 $, though the coefficient are all statistically significant. 
+
+The diviance decreases from 13299 in null model to 12925 in model 1 is significant, which means the intervention changes the outcome. In treatment group 1 (couple = 1, women_alone = 0), only women of couples participated in the counseling sessions. Couples in this group have about a 32.24% lower chance than group where both members of couples participated in the session of having unprotected sexual behaviors. In treatment group 2 (couples = 0, women_alone = 1), women who participated the study alone have 57.212% lower chance to have unprotected sexual behavior compared to group where both members of couples participated in the session.
+
+```{r}
+library('data.table')
+library('knitr')
+
+df = fread('risky_behaviors.csv')
+
+df$treatment <- c("0")
+df$couples <- as.numeric(df$couples)
+df$women_alone <- as.numeric(df$women_alone)
+df <- data.frame(df)
+df$fupacts <- round(df$fupacts, digits = 0)
+
+for (i in 1:nrow(df)){
+  if ((df[i,3] == "0") == TRUE &
+      (df[i,4] == '0') == TRUE) {
+    df[i,8] = "0"
+} else if ((df[i,3] == "1") == TRUE &
+      (df[i,4] == '0') == TRUE){
+    df[i,8] = "1"
+} else if ((df[i,3] == "0") == TRUE & 
+      (df[i,4] == '1') == TRUE){
+    df[i,8] = "2"
+}
+}
+
+data = df
+data$treatment = factor(data$treatment)
+
+Mod1 = glm(fupacts ~ treatment, data = data, family = 'poisson')
+summary(Mod1)
+
+```
+
+And there is overdispersion. The sum of squared standard residuals is  $\sum_{z = 1}^{m}{z_i} = 19022$ , compared to an expected value of n - k = 431. The estimated overdispersion factor is $\frac{\sum_{i = 1}^{m}{z_i}}{n-k} = \frac{19022}{431} = 44.13458$, and the p-value is 1, indicating that the probability is essentially zero that a random variable from a $\chi^2_{431}$ distribution would be as large as 19022. In summary, the risk_behaviors data is overdispersed by a factor of 44, which is huge. 
+
+```{r}
+pv = fitted(Mod1)
+r = (df$fupacts - fitted(Mod1))
+
+library(ggplot2)
+library("gridExtra")
+p1 = ggplot() +
+  geom_point(aes(pv,r),colour = "blue", size = 1,show.legend = TRUE) +
+  ylab('raw residuals') + 
+  xlab('predicted value') +
+  geom_hline(yintercept=0, color = "red") +
+  theme_bw()
+
+sr <- (df$fupacts - fitted(Mod1))/sqrt(fitted(Mod1))
+
+p2 = ggplot() +
+  geom_point(aes(pv,sr),colour = "blue", size = 1,show.legend = TRUE) +
+  ylab("standardized residuals") + 
+  xlab("predicted value") +
+  geom_hline(yintercept=0, color = "red") +
+  geom_hline(yintercept=1.96, linetype="dashed", color = "red") +
+  geom_hline(yintercept=1.96, linetype="dashed", color = "red") +
+  geom_hline(yintercept=-1.96, linetype="dashed", color = "red") +
+  theme_bw()
+grid.arrange(p1,p2)
+
+yhat = predict(Mod1,type="response")
+sum(sr^2)
+sum(sr^2)/431
+pchisq (sum(sr^2), 431)
+```
+
+## Part b :Next extend the model to include pre-treatment measures of the outcome and the additional pre-treatment variables included in the dataset. Does the model fit well? Is there evidence of overdispersion?
+
+The model does not fit well, since the deviance ratio is very large $\frac{10200}{428} = 23.83178 $, though the coefficient are all statistically significant. 
+
+The diviance decreases from 12925 in model 1 to 10200 in model 2 is huge, which means adding other changes the outcome. In treatment group 1 (couple = 1, women_alone = 0), only women of couples participated in the counseling sessions. Couples in this group have about a 41% lower chance than group where both members of couples participated in the session of having unprotected sexual behaviors while other covariates stay the same. 
+
+In treatment group 2 (couples = 0, women_alone = 1), women who participated the study alone have 66% lower chance to have unprotected sexual behavior compared to group where both members of couples participated in the session while other covariates stay the same. 
+
+An increase of unit of number of unprotected sex acts at baseline will decrease the likelihood of having unprotected sexual behavior after the intervention by 1% while other covariates stay the same. 
+
+If the participant is woman, the likelihood of having unprotected sexual behavior after the intervention will increase by 11% while other covariates stay the same. 
+
+And if the baseline HIV status of participant is positive, the likelihood of having unprotected sexual behavior after the intervention will decrease by 43.83% while other covariates stay the same.
+
+```{r}
+Mod2 = glm(fupacts ~ treatment + bupacts + factor(sex) + factor(bs_hiv), family=poisson, data=data)
+summary(Mod2)
+```
+
+And there is overdispersion. The sum of squared standard residuals is  $\sum_{z = 1}^{m}{z_i} = 12841.73$ , compared to an expected value of n - k = 428. The estimated overdispersion factor is $\frac{\sum_{i = 1}^{m}{z_i}}{n-k} = \frac{12841.73}{428} = 30.00404$, and the p-value is 1, indicating that the probability is essentially zero that a random variable from a $\chi^2_{428}$ distribution would be as large as 12841.73. In summary, the risk_behaviors data is overdispersed by a factor of 30, which is huge. 
+
+```{r}
+pv1 = fitted(Mod2)
+r1= (data$fupacts - fitted(Mod2))
+
+p1_1 = ggplot() +
+  geom_point(aes(pv1,r1),colour = "blue", size = 1,show.legend = TRUE) +
+  ylab('raw residuals') + 
+  xlab('predicted value') +
+  geom_hline(yintercept=0, color = "red") +
+  theme_bw()
+
+sr1 <- (data$fupacts - fitted(Mod2))/sqrt(fitted(Mod2))
+p2_1 = ggplot() +
+  geom_point(aes(pv1,sr1),colour = "blue", size = 1,show.legend = TRUE) +
+  ylab("standardized residuals") + 
+  xlab("predicted value") +
+  geom_hline(yintercept=0, color = "red") +
+  geom_hline(yintercept=1.96, linetype="dashed", color = "red") +
+  geom_hline(yintercept=1.96, linetype="dashed", color = "red") +
+  geom_hline(yintercept=-1.96, linetype="dashed", color = "red") +
+  theme_bw()
+grid.arrange(p1_1,p2_1)
+
+sum(sr1^2)
+sum(sr1^2)/428
+pchisq(sum(sr1^2), 428)
+```
+
+## Part c: Fit an overdispersed Poisson model. What do you conclude regarding effectiveness of the intervention?
+
+We fit an overdispersed model using quassipoisson family to correct for overdispersion. And the correction does not change the coefficient drastically.
+The intervention has positive affects on decreasing the unprotected sexual acts.
+Group 1 (only women of couples participated in the counseling sessions) has 40.998% less chance to have unprotexted sexual acts than group where both members of couples participated in the session of having unprotected sexual behaviors while other covariates stay the same.
+
+Group2 (women who participated the study alone) has 66.22% less probability to have unprotexted sexual acts than group where both members of couples participated in the session of having unprotected sexual behaviors while other covariates stay the same.
+
+
+```{r}
+data$c.bupacts = (data$bupacts - mean(data$bupacts)) / (2 * sd(data$bupacts))
+Mod2.ext <- glm(fupacts ~ treatment + c.bupacts + as.factor(sex) + bs_hiv, family=quasipoisson, data=data)
+summary(Mod2.ext)
+```
+ 
+## Part d: These data include responses from both men and women from the participating couples. Does this give you any concern with regard to our modeling assumptions?
+
+Yes, because people in the same couple might be highly correlated.
+
+# Q2
+
+
+# Q3
+
+For part a, the result is pretty the same.
+```{r}
+library(MASS)
+data_mat = model.matrix(fupacts~.,data[,-1])
+x = data_mat[,7:8]
+x2 = data_mat[,c(2,5,6,7,8)]
+
+y = data$fupacts
+
+betas = c(3,-0.5,-0.5)
+betas2 = c(2,-0.4,-0.6,0,0.1,-0.5)
+
+rls = function(x,y,betas,e = 1e-20){
+  x = cbind(1,x)
+  
+  for(i in 1:5000){
+  eta = x %*% betas
+  mu = exp(eta)
+  V = mu
+  Z = eta + (y -mu)/mu
+  W = as.vector(V/exp(2*eta))
+  
+  betas_n =lsfit(x,Z,wt = 1/W, intercept = F)$coef
+  #betas_n = ginv(t(x) %*% diag(W) %*% x) %*% (t(x) %*% diag(W) %*% Z)
+  diff = sum(abs(betas_n - betas))
+  
+  if(diff >= e) {
+    betas = betas_n
+    } else 
+      {break}
+  }
+  return(betas_n)
+}
+
+rls(x=x, y=y, betas = betas)
+rls(x=x2, y=y, betas = betas2)
+```
